@@ -1,0 +1,31 @@
+[package]
+name = "trustworthy-dolphin"
+authors = ["Arc-blroth <45273859+Arc-blroth@users.noreply.github.com>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.bevy]
+version = "0.6.0"
+default-features = false
+features = [
+    "bevy_audio",
+    "bevy_winit",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "png",
+    "vorbis",
+    "x11",
+    "filesystem_watcher",
+]
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.4.2"
+winapi = { version = "0.3.9", features = ["winuser"] }
+
+[profile.release]
+lto = true
+strip = true
+opt-level = 3

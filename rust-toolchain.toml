@@ -1,0 +1,4 @@
+[toolchain]
+channel = "nightly-2022-01-29"
+components = [ "rustfmt" ]
+targets = [ "x86_64-pc-windows-msvc" ]
