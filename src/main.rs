@@ -7,9 +7,10 @@
 //! Contains seawater, dolphins, and lots of bubbles.
 
 use bevy::DefaultPlugins;
-use bevy::prelude::{App, error, IntoExclusiveSystem, ResMut, WindowDescriptor, Windows};
+use bevy::prelude::*;
 use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 
 fn main() {
     App::new()
@@ -20,14 +21,29 @@ fn main() {
             transparent: true,
             ..WindowDescriptor::default()
         })
+        .insert_resource(ClearColor(Color::NONE))
         .add_plugins(DefaultPlugins)
         .add_startup_system(window_setup.exclusive_system())
+        .add_startup_system(setup)
         .run();
 }
 
-fn window_setup(mut winit_windows: ResMut<WinitWindows>) {
+fn window_setup(winit_windows: ResMut<WinitWindows>) {
     let primary = winit_windows.get_window(WindowId::primary()).expect("Primary window doesn't exist?");
+    let monitor = primary.current_monitor().expect("Current window has no monitor?");
     primary.set_always_on_top(true);
+
+    // on Windows, making the window take up the full screen
+    // seems to automatically put it into fullscreen mode,
+    // which we don't want
+    primary.set_outer_position({
+        let pos = monitor.position();
+        PhysicalPosition::new(pos.x, pos.y + 1)
+    });
+    primary.set_inner_size({
+        let size = monitor.size();
+        PhysicalSize::new(size.width, size.height - 1)
+    });
 
     // remove the window from the taskbar and pass through clicks
     #[cfg(target_os = "windows")]
@@ -43,8 +59,7 @@ fn window_setup(mut winit_windows: ResMut<WinitWindows>) {
 
             let mut ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             ex_style |= WS_EX_TOOLWINDOW as LONG_PTR;
-            ex_style |= WS_EX_LAYERED as LONG_PTR;
-            ex_style |= WS_EX_TRANSPARENT as LONG_PTR;
+            ex_style |= (WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT) as LONG_PTR;
             ex_style &= !WS_EX_APPWINDOW as LONG_PTR;
             ex_style &= !WS_EX_ACCEPTFILES as LONG_PTR;
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
@@ -55,4 +70,22 @@ fn window_setup(mut winit_windows: ResMut<WinitWindows>) {
             error!("Couldn't get raw window handle, things will probably look weird!");
         }
     }
+}
+
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(0.0, 0.0, 0.0),
+                scale: Vec3::new(64.0, 64.0, 0.0),
+                ..Transform::default()
+            },
+            sprite: Sprite {
+                color: Color::rgb(0.0, 0.5, 1.0),
+                ..Sprite::default()
+            },
+            ..SpriteBundle::default()
+        });
 }
