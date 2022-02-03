@@ -5,6 +5,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+benimator = "2.0.1"
+bevy_ase = { git = "https://github.com/Arc-blroth/bevy_ase", rev = "3577fd2f1c543b8d69301bd3920bea2b0ac70ec1", features = ["benimator"] }
 winit = "0.26.1"
 
 [dependencies.bevy]
@@ -27,6 +29,10 @@ features = [
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.4.2"
 winapi = { version = "0.3.9", features = ["winuser"] }
+
+[features]
+default = ["bevy_dyn"]
+bevy_dyn = ["bevy/dynamic"]
 
 [profile.release]
 lto = true
