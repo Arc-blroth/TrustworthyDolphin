@@ -9,6 +9,7 @@
 #[cfg(all(not(debug_assertions), feature = "bevy_dyn"))]
 compile_error!("Bevy should not be dynamically linked for release builds!");
 
+use std::time::Duration;
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
 use bevy::DefaultPlugins;
 use bevy::prelude::*;
@@ -31,7 +32,14 @@ pub const ASSETS: [&str; 2] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LoadingState {
     Loading,
-    Loaded,
+    FillingWater,
+    Play,
+}
+
+#[derive(Component)]
+struct Water {
+    pub start_time: Duration,
+    pub water_level: f64,
 }
 
 fn main() {
@@ -51,7 +59,13 @@ fn main() {
         .add_state(LoadingState::Loading)
         .add_system_set(SystemSet::on_enter(LoadingState::Loading).with_system(load_assets.system()))
         .add_system_set(SystemSet::on_update(LoadingState::Loading).with_system(check_loading.system()))
-        .add_system_set(SystemSet::on_enter(LoadingState::Loaded).with_system(setup.system()))
+        .add_system_set(
+            SystemSet::on_enter(LoadingState::FillingWater)
+                .with_system(setup_camera.system())
+                .with_system(setup_water.system())
+        )
+        .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water.system()))
+        .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith.system()))
         .run();
 }
 
@@ -107,25 +121,30 @@ fn load_assets(asset_server: Res<AssetServer>, mut ase_loader: ResMut<AseLoader>
 
 fn check_loading(mut state: ResMut<State<LoadingState>>, ase_loader: Res<AseLoader>) {
     if ase_loader.is_loaded() {
-        state.set(LoadingState::Loaded).unwrap()
+        state.set(LoadingState::FillingWater).unwrap()
     }
 }
 
-fn setup(
+fn setup_camera(mut commands: Commands) {
+    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+}
+
+fn get_primary_window_size(windows: &Res<WinitWindows>) -> Vec2 {
+    let primary_window = windows.get_window(WindowId::primary()).unwrap();
+    let logical_size = primary_window.inner_size().to_logical::<f32>(primary_window.scale_factor());
+    Vec2::new(logical_size.width, logical_size.height)
+}
+
+fn setup_water(
     mut commands: Commands,
     windows: Res<WinitWindows>,
     ase_assets: Res<AseFileMap>,
     mut images: ResMut<Assets<Image>>,
-    ase_animations: Res<Assets<AseAnimation>>,
-    mut animations: ResMut<Assets<SpriteSheetAnimation>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    time: Res<Time>,
 ) {
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-
-    let primary_window = windows.get_window(WindowId::primary()).unwrap();
-    let window_size = primary_window.inner_size().to_logical::<f32>(primary_window.scale_factor());
-    let window_size = Vec2::new(window_size.width, window_size.height);
+    let window_size = get_primary_window_size(&windows);
 
     let wave_ase = ase_assets.get(WAVE_TEXTURE_PATH.as_ref()).unwrap();
     let wave_texture_handle = wave_ase.texture(0).unwrap();
@@ -152,12 +171,43 @@ fn setup(
         mesh: meshes.add(wave_mesh).into(),
         material: materials.add(ColorMaterial::from(wave_texture_handle.clone())),
         transform: Transform {
-            translation: Vec3::new(0.0, window_size.y * -0.5 + 24.0, 1.0),
+            translation: Vec3::new(0.0, -window_size.y, 1.0),
             ..Transform::default()
         },
         ..ColorMesh2dBundle::default()
+    })
+    .insert(Water {
+        start_time: time.time_since_startup(),
+        water_level: 0.0,
     });
+}
 
+fn fill_water(
+    mut query: Query<(&mut Water, &mut Transform)>,
+    mut state: ResMut<State<LoadingState>>,
+    windows: Res<WinitWindows>,
+    time: Res<Time>,
+) {
+    let (mut water, mut transform): (Mut<Water>, Mut<Transform>) = query.single_mut();
+    let anim_time = (time.time_since_startup() - water.start_time).as_secs_f64();
+
+    if anim_time >= 1.0 {
+        water.water_level = 1.0;
+        state.set(LoadingState::Play).unwrap();
+    } else {
+        water.water_level = -16.0 * (anim_time - 1.0).powf(4.0) + 1.0;
+    }
+
+    let window_size = get_primary_window_size(&windows);
+    transform.translation.y = ((-1.0 + water.water_level * 0.5) * window_size.y as f64) as f32;
+}
+
+fn spawn_faith(
+    mut commands: Commands,
+    ase_assets: Res<AseFileMap>,
+    ase_animations: Res<Assets<AseAnimation>>,
+    mut animations: ResMut<Assets<SpriteSheetAnimation>>,
+) {
     let faith_ase = ase_assets.get(FAITH_TEXTURE_PATH.as_ref()).unwrap();
     let swim_animation = ase_animations.get(faith_ase.animations("swim").unwrap().first().unwrap()).unwrap();
     let animation_handle = animations.add(swim_animation.into());
