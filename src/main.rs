@@ -10,6 +10,7 @@
 compile_error!("Bevy should not be dynamically linked for release builds!");
 
 use std::time::Duration;
+use std::f64::consts::PI;
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
 use bevy::DefaultPlugins;
 use bevy::prelude::*;
@@ -66,6 +67,7 @@ fn main() {
         )
         .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water.system()))
         .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith.system()))
+        .add_system_set(SystemSet::on_update(LoadingState::Play).with_system(wave_water.system()))
         .run();
 }
 
@@ -188,16 +190,39 @@ fn fill_water(
     windows: Res<WinitWindows>,
     time: Res<Time>,
 ) {
-    let (mut water, mut transform): (Mut<Water>, Mut<Transform>) = query.single_mut();
+    let (mut water, transform): (Mut<Water>, Mut<Transform>) = query.single_mut();
     let anim_time = (time.time_since_startup() - water.start_time).as_secs_f64();
 
     if anim_time >= 1.0 {
         water.water_level = 1.0;
+        water.start_time = time.time_since_startup();
         state.set(LoadingState::Play).unwrap();
     } else {
         water.water_level = -16.0 * (anim_time - 1.0).powf(4.0) + 1.0;
     }
 
+    update_water_transform(water, transform, windows);
+}
+
+fn wave_water(
+    mut query: Query<(&mut Water, &mut Transform)>,
+    windows: Res<WinitWindows>,
+    time: Res<Time>,
+) {
+    let (mut water, transform): (Mut<Water>, Mut<Transform>) = query.single_mut();
+    let anim_time = time.time_since_startup() - water.start_time;
+    let wave_time = Duration::new(anim_time.as_secs() % 10, anim_time.subsec_nanos()).as_secs_f64();
+    let wave_y = f64::sin(0.4 * PI * wave_time) + f64::sin(0.6 * PI * wave_time);
+    water.water_level = 1.0 + 0.01 * wave_y;
+
+    update_water_transform(water, transform, windows);
+}
+
+fn update_water_transform(
+    water: Mut<Water>,
+    mut transform: Mut<Transform>,
+    windows: Res<WinitWindows>,
+) {
     let window_size = get_primary_window_size(&windows);
     transform.translation.y = ((-1.0 + water.water_level * 0.5) * window_size.y as f64) as f32;
 }
