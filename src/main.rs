@@ -13,6 +13,7 @@ use std::time::Duration;
 use std::f64::consts::PI;
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
 use bevy::DefaultPlugins;
+use bevy::math::DVec2;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
 use bevy::render::render_resource::AddressMode;
@@ -30,6 +31,8 @@ pub const ASSETS: [&str; 2] = [
     WAVE_TEXTURE_PATH
 ];
 
+const STANDARD_GRAVITY: f64 = 9.80665;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LoadingState {
     Loading,
@@ -37,10 +40,21 @@ enum LoadingState {
     Play,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SystemLabel)]
+enum SystemLabels {
+    TransformWater,
+}
+
 #[derive(Component)]
 struct Water {
     pub start_time: Duration,
     pub water_level: f64,
+}
+
+#[derive(Component)]
+struct Faith {
+    pub position: DVec2,
+    pub velocity: DVec2,
 }
 
 fn main() {
@@ -67,7 +81,11 @@ fn main() {
         )
         .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water.system()))
         .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith.system()))
-        .add_system_set(SystemSet::on_update(LoadingState::Play).with_system(wave_water.system()))
+        .add_system_set(
+            SystemSet::on_update(LoadingState::Play)
+                .with_system(wave_water.label(SystemLabels::TransformWater))
+                .with_system(update_faith.after(SystemLabels::TransformWater))
+        )
         .run();
 }
 
@@ -232,7 +250,10 @@ fn spawn_faith(
     ase_assets: Res<AseFileMap>,
     ase_animations: Res<Assets<AseAnimation>>,
     mut animations: ResMut<Assets<SpriteSheetAnimation>>,
+    windows: Res<WinitWindows>,
 ) {
+    let window_size = get_primary_window_size(&windows);
+
     let faith_ase = ase_assets.get(FAITH_TEXTURE_PATH.as_ref()).unwrap();
     let swim_animation = ase_animations.get(faith_ase.animations("swim").unwrap().first().unwrap()).unwrap();
     let animation_handle = animations.add(swim_animation.into());
@@ -247,5 +268,36 @@ fn spawn_faith(
             ..SpriteSheetBundle::default()
         })
         .insert(animation_handle)
-        .insert(benimator::Play);
+        .insert(benimator::Play)
+        .insert(Faith {
+            position: DVec2::new(0.0, window_size.y as f64 * 0.5),
+            velocity: DVec2::default(),
+        });
+}
+
+fn update_faith(
+    mut faith_query: Query<(&mut Faith, &mut Transform)>,
+    water_query: Query<&Water>,
+    time: Res<Time>,
+    windows: Res<WinitWindows>,
+) {
+    let (mut faith, mut faith_transform): (Mut<Faith>, Mut<Transform>) = faith_query.single_mut();
+
+    let window_size = get_primary_window_size(&windows);
+    let water_level = (-0.5 + water_query.single().water_level * 0.5) * window_size.y as f64;
+    let delta = time.delta_seconds_f64() * 10.0;
+
+    // Update second order displacement
+    if faith.position.y > water_level {
+        faith.velocity.y -= STANDARD_GRAVITY * delta;
+    } else {
+        faith.velocity.y += ((water_level - faith.position.y) * 0.1) * delta;
+    }
+
+    // Update first order displacement
+    let displacement = faith.velocity * delta;
+    faith.position += displacement;
+
+    // Update transform
+    faith_transform.translation = faith.position.as_vec2().extend(0.0);
 }
