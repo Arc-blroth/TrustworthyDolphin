@@ -6,23 +6,32 @@
 //! A playful app that adds aquatic spice to desktops.
 //! Contains seawater, dolphins, and lots of bubbles.
 
+#![feature(decl_macro)]
+
 #[cfg(all(not(debug_assertions), feature = "bevy_dyn"))]
 compile_error!("Bevy should not be dynamically linked for release builds!");
 
 use std::time::Duration;
 use std::f64::consts::PI;
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
+use bevy::asset::AssetPlugin;
 use bevy::DefaultPlugins;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::DVec2;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
 use bevy::render::render_resource::AddressMode;
+use bevy::tasks::IoTaskPool;
 use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
 use bevy_ase::asset::{Animation as AseAnimation, AseFileMap};
 use bevy_ase::loader::{AseLoaderDefaultPlugin, Loader as AseLoader};
 use winit::dpi::{PhysicalPosition, PhysicalSize};
+use crate::assets::{EmbeddedAssetsPlugin, include_assets};
+use crate::util::Also;
+
+mod assets;
+mod util;
 
 pub const FAITH_TEXTURE_PATH: &str = "faith.ase";
 pub const WAVE_TEXTURE_PATH: &str = "wave.ase";
@@ -65,9 +74,26 @@ fn main() {
             ..WindowDescriptor::default()
         })
         .insert_resource(ClearColor(Color::NONE))
-        .add_plugins(DefaultPlugins)
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .also(|app| {
+            if cfg!(feature = "embed_assets") {
+                app.insert_resource(include_assets![
+                    "faith.ase",
+                    "wave.ase",
+                ]);
+            }
+        })
+        .add_plugins_with(DefaultPlugins, |group| {
+            if cfg!(feature = "embed_assets") {
+                group.add_before::<AssetPlugin, _>(EmbeddedAssetsPlugin);
+            }
+            group
+        })
+        .also(|app| {
+            if cfg!(debug_assertions) {
+                app.add_plugin(LogDiagnosticsPlugin::default())
+                    .add_plugin(FrameTimeDiagnosticsPlugin::default());
+            }
+        })
         .add_plugin(AnimationPlugin::default())
         .add_plugin(AseLoaderDefaultPlugin)
         .add_startup_system(window_setup.exclusive_system())

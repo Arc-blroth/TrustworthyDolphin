@@ -2976,6 +2976,7 @@ dependencies = [
  "benimator",
  "bevy",
  "bevy_ase",
+ "lazy_static",
  "raw-window-handle",
  "winapi",
  "winit",
