@@ -13,6 +13,7 @@ use std::time::Duration;
 use std::f64::consts::PI;
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
 use bevy::DefaultPlugins;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::DVec2;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
@@ -68,19 +69,21 @@ fn main() {
         })
         .insert_resource(ClearColor(Color::NONE))
         .add_plugins(DefaultPlugins)
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(AnimationPlugin::default())
         .add_plugin(AseLoaderDefaultPlugin)
         .add_startup_system(window_setup.exclusive_system())
         .add_state(LoadingState::Loading)
-        .add_system_set(SystemSet::on_enter(LoadingState::Loading).with_system(load_assets.system()))
-        .add_system_set(SystemSet::on_update(LoadingState::Loading).with_system(check_loading.system()))
+        .add_system_set(SystemSet::on_enter(LoadingState::Loading).with_system(load_assets))
+        .add_system_set(SystemSet::on_update(LoadingState::Loading).with_system(check_loading))
         .add_system_set(
             SystemSet::on_enter(LoadingState::FillingWater)
-                .with_system(setup_camera.system())
-                .with_system(setup_water.system())
+                .with_system(setup_camera)
+                .with_system(setup_water)
         )
-        .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water.system()))
-        .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith.system()))
+        .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water))
+        .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith))
         .add_system_set(
             SystemSet::on_update(LoadingState::Play)
                 .with_system(wave_water.label(SystemLabels::TransformWater))
@@ -285,7 +288,7 @@ fn update_faith(
 
     let window_size = get_primary_window_size(&windows);
     let water_level = (-0.5 + water_query.single().water_level * 0.5) * window_size.y as f64;
-    let delta = time.delta_seconds_f64() * 10.0;
+    let delta = time.delta_seconds_f64() * 4.0;
 
     // Update second order displacement
     if faith.position.y > water_level {

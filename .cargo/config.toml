@@ -1,3 +1,6 @@
 [target.x86_64-pc-windows-msvc]
 linker = "lld-link.exe"
+
+# https://github.com/rust-lang/cargo/commit/774d9492dc359d9a2068924c01e9231cfadb0c0a
+[target.'cfg(all(windows, target_env = "msvc", debug_assertions))']
 rustflags = ["-Zshare-generics=n"]
