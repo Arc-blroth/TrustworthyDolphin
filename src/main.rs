@@ -33,17 +33,14 @@ pub const ASSETS: [&str; 2] = [
 ];
 
 const STANDARD_GRAVITY: f64 = 9.80665;
+const SPEED_MULTIPLER: f64 = 6.0;
+const MAX_STEP_TIME: f64 = 1.0 / 60.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LoadingState {
     Loading,
     FillingWater,
     Play,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SystemLabel)]
-enum SystemLabels {
-    TransformWater,
 }
 
 #[derive(Component)]
@@ -86,8 +83,7 @@ fn main() {
         .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith))
         .add_system_set(
             SystemSet::on_update(LoadingState::Play)
-                .with_system(wave_water.label(SystemLabels::TransformWater))
-                .with_system(update_faith.after(SystemLabels::TransformWater))
+                .with_system(wave_water.chain(update_faith))
         )
         .run();
 }
@@ -288,19 +284,25 @@ fn update_faith(
 
     let window_size = get_primary_window_size(&windows);
     let water_level = (-0.5 + water_query.single().water_level * 0.5) * window_size.y as f64;
-    let delta = time.delta_seconds_f64() * 4.0;
 
-    // Update second order displacement
-    if faith.position.y > water_level {
-        faith.velocity.y -= STANDARD_GRAVITY * delta;
-    } else {
-        faith.velocity.y += ((water_level - faith.position.y) * 0.1) * delta;
+    // subdivide simulation time to guard against lag spikes
+    let full_delta = time.delta_seconds_f64() * SPEED_MULTIPLER;
+    let steps = (full_delta / MAX_STEP_TIME).ceil() as u64;
+    for i in 0..steps {
+        let delta = if i == steps - 1 { full_delta % MAX_STEP_TIME } else { MAX_STEP_TIME };
+
+        // Update second order displacement
+        if faith.position.y > water_level {
+            faith.velocity.y -= STANDARD_GRAVITY * delta;
+        } else {
+            faith.velocity.y += ((water_level - faith.position.y).sqrt()) * delta;
+        }
+
+        // Update first order displacement
+        let displacement = faith.velocity * delta;
+        faith.position += displacement;
+
+        // Update transform
+        faith_transform.translation = faith.position.as_vec2().extend(0.0);
     }
-
-    // Update first order displacement
-    let displacement = faith.velocity * delta;
-    faith.position += displacement;
-
-    // Update transform
-    faith_transform.translation = faith.position.as_vec2().extend(0.0);
 }
