@@ -8,6 +8,8 @@
 
 #![feature(decl_macro)]
 
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 #[cfg(all(not(debug_assertions), feature = "bevy_dyn"))]
 compile_error!("Bevy should not be dynamically linked for release builds!");
 
@@ -145,10 +147,11 @@ fn window_setup(winit_windows: ResMut<WinitWindows>) {
 
             let mut ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             ex_style |= WS_EX_TOOLWINDOW as LONG_PTR;
-            ex_style |= (WS_EX_COMPOSITED | WS_EX_LAYERED | WS_EX_TRANSPARENT) as LONG_PTR;
+            ex_style |= (WS_EX_LAYERED | WS_EX_TRANSPARENT) as LONG_PTR;
             ex_style &= !WS_EX_APPWINDOW as LONG_PTR;
             ex_style &= !WS_EX_ACCEPTFILES as LONG_PTR;
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style);
+            SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
 
             ShowWindow(hwnd, SW_SHOW);
             SetFocus(std::ptr::null_mut());

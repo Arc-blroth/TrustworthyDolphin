@@ -46,7 +46,8 @@ bevy_dyn = ["bevy/dynamic"]
 embed_assets = []
 
 [profile.release]
-debug = true
+# note that having both lto and debuginfo
+# makes compile times abysmal (58 minutes)
 lto = true
 strip = true
 opt-level = 3
