@@ -64,6 +64,7 @@ struct Water {
 struct Faith {
     pub position: DVec2,
     pub velocity: DVec2,
+    pub rotation: f64,
 }
 
 fn main() {
@@ -255,6 +256,7 @@ fn spawn_faith(
         .insert(Faith {
             position: DVec2::new(0.0, window_size.y as f64 * 0.5),
             velocity: DVec2::default(),
+            rotation: 0.0,
         });
 }
 
@@ -286,7 +288,17 @@ fn update_faith(
         let displacement = faith.velocity * delta;
         faith.position += displacement;
 
+        // Update rotation
+        let dist_from_water = 2.0 * (faith.position.y - water_level).abs() / window_size.y as f64;
+        let dir = faith.velocity.y * ((1.0 - dist_from_water).powf(2.0) - 0.01 * dist_from_water);
+        faith.rotation = if faith.position.y > water_level {
+            f64::atan(dir)
+        } else {
+            -PI - f64::atan(dir)
+        };
+
         // Update transform
         faith_transform.translation = faith.position.as_vec2().extend(0.0);
+        faith_transform.rotation = Quat::from_rotation_z(faith.rotation as f32);
     }
 }
