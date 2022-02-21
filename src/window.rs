@@ -1,11 +1,13 @@
-use bevy::prelude::{ResMut, error};
-use bevy::winit::WinitWindows;
+use bevy::prelude::{error, ResMut};
 use bevy::window::WindowId;
+use bevy::winit::WinitWindows;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::window::Window;
 
 pub fn setup(winit_windows: ResMut<WinitWindows>) {
-    let primary = winit_windows.get_window(WindowId::primary()).expect("Primary window doesn't exist?");
+    let primary = winit_windows
+        .get_window(WindowId::primary())
+        .expect("Primary window doesn't exist?");
     let monitor = primary.current_monitor().expect("Current window has no monitor?");
     primary.set_always_on_top(true);
 

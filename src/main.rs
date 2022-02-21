@@ -7,17 +7,16 @@
 //! Contains seawater, dolphins, and lots of bubbles.
 
 #![feature(decl_macro)]
-
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(all(not(debug_assertions), feature = "bevy_dyn"))]
 compile_error!("Bevy should not be dynamically linked for release builds!");
 
-use std::time::Duration;
 use std::f64::consts::PI;
+use std::time::Duration;
+
 use benimator::{AnimationPlugin, SpriteSheetAnimation};
 use bevy::asset::AssetPlugin;
-use bevy::DefaultPlugins;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::math::DVec2;
 use bevy::prelude::*;
@@ -26,10 +25,12 @@ use bevy::render::render_resource::AddressMode;
 use bevy::tasks::IoTaskPool;
 use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
+use bevy::DefaultPlugins;
 use bevy_ase::asset::{Animation as AseAnimation, AseFileMap};
 use bevy_ase::loader::{AseLoaderDefaultPlugin, Loader as AseLoader};
 use rand::Rng;
-use crate::assets::{EmbeddedAssetsPlugin, include_assets};
+
+use crate::assets::{include_assets, EmbeddedAssetsPlugin};
 use crate::util::Also;
 
 mod assets;
@@ -40,11 +41,7 @@ pub const FAITH_TEXTURE_PATH: &str = "faith.ase";
 pub const WAVE_TEXTURE_PATH: &str = "wave.ase";
 pub const BUBBLE_TEXTURE_PATH: &str = "bubble.ase";
 
-pub const ASSETS: [&str; 3] = [
-    FAITH_TEXTURE_PATH,
-    WAVE_TEXTURE_PATH,
-    BUBBLE_TEXTURE_PATH,
-];
+pub const ASSETS: [&str; 3] = [FAITH_TEXTURE_PATH, WAVE_TEXTURE_PATH, BUBBLE_TEXTURE_PATH];
 
 const STANDARD_GRAVITY: f64 = 9.80665;
 const SPEED_MULTIPLER: f64 = 6.0;
@@ -92,11 +89,7 @@ fn main() {
         .insert_resource(ClearColor(Color::NONE))
         .also(|app| {
             if cfg!(feature = "embed_assets") {
-                app.insert_resource(include_assets![
-                    "faith.ase",
-                    "wave.ase",
-                    "bubble.ase",
-                ]);
+                app.insert_resource(include_assets!["faith.ase", "wave.ase", "bubble.ase",]);
             }
         })
         .add_plugins_with(DefaultPlugins, |group| {
@@ -120,14 +113,14 @@ fn main() {
         .add_system_set(
             SystemSet::on_enter(LoadingState::FillingWater)
                 .with_system(setup_camera)
-                .with_system(setup_water)
+                .with_system(setup_water),
         )
         .add_system_set(SystemSet::on_update(LoadingState::FillingWater).with_system(fill_water))
         .add_system_set(SystemSet::on_enter(LoadingState::Play).with_system(spawn_faith))
         .add_system_set(
             SystemSet::on_update(LoadingState::Play)
                 .with_system(wave_water.chain(update_faith))
-                .with_system(update_bubbles)
+                .with_system(update_bubbles),
         )
         .run();
 }
@@ -150,7 +143,9 @@ fn setup_camera(mut commands: Commands) {
 
 fn get_primary_window_size(windows: &Res<WinitWindows>) -> Vec2 {
     let primary_window = windows.get_window(WindowId::primary()).unwrap();
-    let logical_size = primary_window.inner_size().to_logical::<f32>(primary_window.scale_factor());
+    let logical_size = primary_window
+        .inner_size()
+        .to_logical::<f32>(primary_window.scale_factor());
     Vec2::new(logical_size.width, logical_size.height)
 }
 
@@ -186,19 +181,20 @@ fn setup_water(
         mesh
     };
 
-    commands.spawn_bundle(ColorMesh2dBundle {
-        mesh: meshes.add(wave_mesh).into(),
-        material: materials.add(ColorMaterial::from(wave_texture_handle.clone())),
-        transform: Transform {
-            translation: Vec3::new(0.0, -window_size.y, 1.0),
-            ..Transform::default()
-        },
-        ..ColorMesh2dBundle::default()
-    })
-    .insert(Water {
-        start_time: time.time_since_startup(),
-        water_level: 0.0,
-    });
+    commands
+        .spawn_bundle(ColorMesh2dBundle {
+            mesh: meshes.add(wave_mesh).into(),
+            material: materials.add(ColorMaterial::from(wave_texture_handle.clone())),
+            transform: Transform {
+                translation: Vec3::new(0.0, -window_size.y, 1.0),
+                ..Transform::default()
+            },
+            ..ColorMesh2dBundle::default()
+        })
+        .insert(Water {
+            start_time: time.time_since_startup(),
+            water_level: 0.0,
+        });
 }
 
 fn fill_water(
@@ -221,11 +217,7 @@ fn fill_water(
     update_water_transform(water, transform, windows);
 }
 
-fn wave_water(
-    mut query: Query<(&mut Water, &mut Transform)>,
-    windows: Res<WinitWindows>,
-    time: Res<Time>,
-) {
+fn wave_water(mut query: Query<(&mut Water, &mut Transform)>, windows: Res<WinitWindows>, time: Res<Time>) {
     let (mut water, transform): (Mut<Water>, Mut<Transform>) = query.single_mut();
     let anim_time = time.time_since_startup() - water.start_time;
     let wave_time = Duration::new(anim_time.as_secs() % 10, anim_time.subsec_nanos()).as_secs_f64();
@@ -235,11 +227,7 @@ fn wave_water(
     update_water_transform(water, transform, windows);
 }
 
-fn update_water_transform(
-    water: Mut<Water>,
-    mut transform: Mut<Transform>,
-    windows: Res<WinitWindows>,
-) {
+fn update_water_transform(water: Mut<Water>, mut transform: Mut<Transform>, windows: Res<WinitWindows>) {
     let window_size = get_primary_window_size(&windows);
     transform.translation.y = ((-1.0 + water.water_level * 0.5) * window_size.y as f64) as f32;
 }
@@ -254,7 +242,9 @@ fn spawn_faith(
     let window_size = get_primary_window_size(&windows);
 
     let faith_ase = ase_assets.get(FAITH_TEXTURE_PATH.as_ref()).unwrap();
-    let swim_animation = ase_animations.get(faith_ase.animations("swim").unwrap().first().unwrap()).unwrap();
+    let swim_animation = ase_animations
+        .get(faith_ase.animations("swim").unwrap().first().unwrap())
+        .unwrap();
     let animation_handle = animations.add(swim_animation.into());
 
     commands
@@ -290,7 +280,11 @@ fn update_faith(
     let full_delta = time.delta_seconds_f64() * SPEED_MULTIPLER;
     let steps = (full_delta / MAX_STEP_TIME).ceil() as u64;
     for i in 0..steps {
-        let delta = if i == steps - 1 { full_delta % MAX_STEP_TIME } else { MAX_STEP_TIME };
+        let delta = if i == steps - 1 {
+            full_delta % MAX_STEP_TIME
+        } else {
+            MAX_STEP_TIME
+        };
 
         // Update second order displacement
         if faith.position.y > water_level {
@@ -326,7 +320,11 @@ fn update_bubbles(
     time: Res<Time>,
     windows: Res<WinitWindows>,
 ) {
-    let bubble_texture = ase_assets.get(BUBBLE_TEXTURE_PATH.as_ref()).unwrap().texture(0).unwrap();
+    let bubble_texture = ase_assets
+        .get(BUBBLE_TEXTURE_PATH.as_ref())
+        .unwrap()
+        .texture(0)
+        .unwrap();
 
     let mut num_bubbles = 0;
     for component in bubbles_query.iter_mut() {
@@ -346,17 +344,17 @@ fn update_bubbles(
             } else if bubbles.step < bubbles.height {
                 // add bubbles
                 for i in bubbles.step..steps_since_start.min(bubbles.height) {
-                    commands.entity(entity)
-                        .with_children(|builder| {
-                            builder
-                                .spawn_bundle(SpriteBundle {
-                                    transform: Transform::from_translation(
-                                        Vec3::new((i % 2) as f32 * 6.0, i as f32 * 6.0, 0.0),
-                                    ),
-                                    texture: images.get_handle(bubble_texture),
-                                    ..SpriteBundle::default()
-                                });
+                    commands.entity(entity).with_children(|builder| {
+                        builder.spawn_bundle(SpriteBundle {
+                            transform: Transform::from_translation(Vec3::new(
+                                (i % 2) as f32 * 6.0,
+                                i as f32 * 6.0,
+                                0.0,
+                            )),
+                            texture: images.get_handle(bubble_texture),
+                            ..SpriteBundle::default()
                         });
+                    });
                 }
                 bubbles.step = steps_since_start.min(bubbles.height);
             } else {
@@ -376,7 +374,8 @@ fn update_bubbles(
         let window_size = get_primary_window_size(&windows);
         let mut rng = rand::thread_rng();
 
-        commands.spawn()
+        commands
+            .spawn()
             .insert(Bubbles {
                 start_time: time.time_since_startup() + Duration::from_secs_f64(rng.gen_range(0.0..=2.0)),
                 delta_between_bubbles: rng.gen_range(0.1..=0.4),
@@ -387,7 +386,7 @@ fn update_bubbles(
                 translation: Vec3::new(
                     rng.gen_range::<i8, _>(-15..=15) as f32 / 16.0 * window_size.x / 2.0,
                     -window_size.y / 2.0 + 6.0,
-                    -0.0
+                    -0.0,
                 ),
                 scale: Vec2::splat(2.0).extend(0.0),
                 ..Transform::default()

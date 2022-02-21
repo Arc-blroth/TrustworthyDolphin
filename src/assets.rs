@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
 use bevy::asset::{AssetIo, AssetIoError, BoxedFuture};
 use bevy::prelude::{AssetServer, Plugin};
+
 use crate::{App, IoTaskPool};
 
 #[derive(Clone, Debug)]
@@ -64,8 +66,17 @@ pub struct EmbeddedAssetsPlugin;
 
 impl Plugin for EmbeddedAssetsPlugin {
     fn build(&self, app: &mut App) {
-        let task_pool = app.world.get_resource::<IoTaskPool>().expect("`IoTaskPool` resource not found.").0.clone();
-        let asset_io = app.world.get_resource::<EmbeddedAssetIo>().expect("Missing `EmbeddedAssetIo` resource!").clone();
+        let task_pool = app
+            .world
+            .get_resource::<IoTaskPool>()
+            .expect("`IoTaskPool` resource not found.")
+            .0
+            .clone();
+        let asset_io = app
+            .world
+            .get_resource::<EmbeddedAssetIo>()
+            .expect("Missing `EmbeddedAssetIo` resource!")
+            .clone();
         let asset_server = AssetServer::with_boxed_io(Box::new(asset_io), task_pool);
         app.insert_resource(asset_server);
     }
