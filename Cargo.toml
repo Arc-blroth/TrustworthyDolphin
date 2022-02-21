@@ -8,6 +8,7 @@ edition = "2021"
 benimator = "2.0.1"
 bevy_ase = { git = "https://github.com/B-Reif/bevy_ase", rev = "2617888de6235a2dea754c5f377c1858fc14f8a4", features = ["benimator"] }
 lazy_static = "1.4.0"
+rand = "0.8.4"
 winit = "0.26.1"
 
 [patch.crates-io]

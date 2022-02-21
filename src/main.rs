@@ -28,6 +28,7 @@ use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
 use bevy_ase::asset::{Animation as AseAnimation, AseFileMap};
 use bevy_ase::loader::{AseLoaderDefaultPlugin, Loader as AseLoader};
+use rand::Rng;
 use crate::assets::{EmbeddedAssetsPlugin, include_assets};
 use crate::util::Also;
 
@@ -37,15 +38,19 @@ mod window;
 
 pub const FAITH_TEXTURE_PATH: &str = "faith.ase";
 pub const WAVE_TEXTURE_PATH: &str = "wave.ase";
+pub const BUBBLE_TEXTURE_PATH: &str = "bubble.ase";
 
-pub const ASSETS: [&str; 2] = [
+pub const ASSETS: [&str; 3] = [
     FAITH_TEXTURE_PATH,
-    WAVE_TEXTURE_PATH
+    WAVE_TEXTURE_PATH,
+    BUBBLE_TEXTURE_PATH,
 ];
 
 const STANDARD_GRAVITY: f64 = 9.80665;
 const SPEED_MULTIPLER: f64 = 6.0;
 const MAX_STEP_TIME: f64 = 1.0 / 60.0;
+
+const MAX_BUBBLES: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LoadingState {
@@ -67,6 +72,14 @@ struct Faith {
     pub rotation: f64,
 }
 
+#[derive(Component)]
+struct Bubbles {
+    pub start_time: Duration,
+    pub delta_between_bubbles: f64,
+    pub height: usize,
+    pub step: usize,
+}
+
 fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
@@ -82,6 +95,7 @@ fn main() {
                 app.insert_resource(include_assets![
                     "faith.ase",
                     "wave.ase",
+                    "bubble.ase",
                 ]);
             }
         })
@@ -113,6 +127,7 @@ fn main() {
         .add_system_set(
             SystemSet::on_update(LoadingState::Play)
                 .with_system(wave_water.chain(update_faith))
+                .with_system(update_bubbles)
         )
         .run();
 }
@@ -300,5 +315,83 @@ fn update_faith(
         // Update transform
         faith_transform.translation = faith.position.as_vec2().extend(0.0);
         faith_transform.rotation = Quat::from_rotation_z(faith.rotation as f32);
+    }
+}
+
+fn update_bubbles(
+    mut commands: Commands,
+    mut bubbles_query: Query<(Entity, &mut Bubbles, &Children)>,
+    ase_assets: Res<AseFileMap>,
+    images: Res<Assets<Image>>,
+    time: Res<Time>,
+    windows: Res<WinitWindows>,
+) {
+    let bubble_texture = ase_assets.get(BUBBLE_TEXTURE_PATH.as_ref()).unwrap().texture(0).unwrap();
+
+    let mut num_bubbles = 0;
+    for component in bubbles_query.iter_mut() {
+        num_bubbles += 1;
+
+        let (entity, mut bubbles, children): (Entity, Mut<Bubbles>, &Children) = component;
+        if time.time_since_startup() < bubbles.start_time {
+            // these bubbles aren't supposed to show yet
+            continue;
+        } else {
+            let time_since_start = (time.time_since_startup() - bubbles.start_time).as_secs_f64();
+            let steps_since_start = (time_since_start / bubbles.delta_between_bubbles).floor() as usize;
+
+            if steps_since_start >= bubbles.height * 2 {
+                // no more bubbles
+                commands.entity(entity).despawn_recursive();
+            } else if bubbles.step < bubbles.height {
+                // add bubbles
+                for i in bubbles.step..steps_since_start.min(bubbles.height) {
+                    commands.entity(entity)
+                        .with_children(|builder| {
+                            builder
+                                .spawn_bundle(SpriteBundle {
+                                    transform: Transform::from_translation(
+                                        Vec3::new((i % 2) as f32 * 6.0, i as f32 * 6.0, 0.0),
+                                    ),
+                                    texture: images.get_handle(bubble_texture),
+                                    ..SpriteBundle::default()
+                                });
+                        });
+                }
+                bubbles.step = steps_since_start.min(bubbles.height);
+            } else {
+                // remove bubbles
+                for i in bubbles.step..steps_since_start.min(bubbles.height * 2) {
+                    let child = children[(i - bubbles.height) - (bubbles.height - children.len())];
+                    commands.entity(entity).remove_children(&[child]);
+                    commands.entity(child).despawn();
+                }
+                bubbles.step = steps_since_start.min(bubbles.height * 2);
+            }
+        }
+    }
+
+    // make new bubbles
+    if num_bubbles < MAX_BUBBLES {
+        let window_size = get_primary_window_size(&windows);
+        let mut rng = rand::thread_rng();
+
+        commands.spawn()
+            .insert(Bubbles {
+                start_time: time.time_since_startup() + Duration::from_secs_f64(rng.gen_range(0.0..=2.0)),
+                delta_between_bubbles: rng.gen_range(0.1..=0.4),
+                height: rng.gen_range(4..=16),
+                step: 0,
+            })
+            .insert_bundle(TransformBundle::from_transform(Transform {
+                translation: Vec3::new(
+                    rng.gen_range::<i8, _>(-15..=15) as f32 / 16.0 * window_size.x / 2.0,
+                    -window_size.y / 2.0 + 6.0,
+                    -0.0
+                ),
+                scale: Vec2::splat(2.0).extend(0.0),
+                ..Transform::default()
+            }))
+            .insert(Children::default());
     }
 }
