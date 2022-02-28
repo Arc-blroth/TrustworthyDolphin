@@ -40,14 +40,21 @@ mod window;
 pub const FAITH_TEXTURE_PATH: &str = "faith.ase";
 pub const WAVE_TEXTURE_PATH: &str = "wave.ase";
 pub const BUBBLE_TEXTURE_PATH: &str = "bubble.ase";
+pub const FISH_TEXTURE_PATH: &str = "fish.ase";
 
-pub const ASSETS: [&str; 3] = [FAITH_TEXTURE_PATH, WAVE_TEXTURE_PATH, BUBBLE_TEXTURE_PATH];
+pub const ASSETS: [&str; 4] = [
+    FAITH_TEXTURE_PATH,
+    WAVE_TEXTURE_PATH,
+    BUBBLE_TEXTURE_PATH,
+    FISH_TEXTURE_PATH,
+];
 
 const STANDARD_GRAVITY: f64 = 9.80665;
 const SPEED_MULTIPLER: f64 = 6.0;
 const MAX_STEP_TIME: f64 = 1.0 / 60.0;
 
 const MAX_BUBBLES: u32 = 16;
+const MAX_FISHES: u32 = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum LoadingState {
@@ -77,6 +84,13 @@ struct Bubbles {
     pub step: usize,
 }
 
+#[derive(Component)]
+struct Fish {
+    pub start_time: Duration,
+    pub flip: bool,
+    pub speed: f64,
+}
+
 fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
@@ -89,7 +103,7 @@ fn main() {
         .insert_resource(ClearColor(Color::NONE))
         .also(|app| {
             if cfg!(feature = "embed_assets") {
-                app.insert_resource(include_assets!["faith.ase", "wave.ase", "bubble.ase",]);
+                app.insert_resource(include_assets!["faith.ase", "wave.ase", "bubble.ase", "fish.ase"]);
             }
         })
         .add_plugins_with(DefaultPlugins, |group| {
@@ -120,7 +134,8 @@ fn main() {
         .add_system_set(
             SystemSet::on_update(LoadingState::Play)
                 .with_system(wave_water.chain(update_faith))
-                .with_system(update_bubbles),
+                .with_system(update_bubbles)
+                .with_system(update_fishes),
         )
         .run();
 }
@@ -392,5 +407,74 @@ fn update_bubbles(
                 ..Transform::default()
             }))
             .insert(Children::default());
+    }
+}
+
+fn update_fishes(
+    mut commands: Commands,
+    mut fish_query: Query<(Entity, &Fish, &mut Visibility, &mut Transform)>,
+    ase_assets: Res<AseFileMap>,
+    images: Res<Assets<Image>>,
+    time: Res<Time>,
+    windows: Res<WinitWindows>,
+) {
+    let window_size = get_primary_window_size(&windows);
+
+    let mut num_fishes = 0;
+    for component in fish_query.iter_mut() {
+        num_fishes += 1;
+
+        let (entity, fish, mut visibility, mut transform): (Entity, &Fish, Mut<Visibility>, Mut<Transform>) = component;
+        if time.time_since_startup() < fish.start_time {
+            // this fish doesn't exist yet
+            continue;
+        } else {
+            visibility.is_visible = true;
+            let time_since_start = (time.time_since_startup() - fish.start_time).as_secs_f64();
+            let direction = if fish.flip { -1.0 } else { 1.0 };
+            transform.translation.x = (time_since_start * fish.speed) as f32 + -direction * (window_size.x / 2.0);
+
+            if !fish.flip && transform.translation.x > window_size.x / 2.0
+                || fish.flip && transform.translation.x < -window_size.x / 2.0
+            {
+                commands.entity(entity).despawn();
+            }
+        }
+    }
+
+    // make new fishes
+    if num_fishes < MAX_FISHES {
+        let mut rng = rand::thread_rng();
+
+        let fish_ase = ase_assets.get(FISH_TEXTURE_PATH.as_ref()).unwrap();
+        let fish_texture = fish_ase.texture(rng.gen_range(0..=5)).unwrap();
+
+        let flip = rng.gen::<bool>();
+        let direction = if flip { -1.0 } else { 1.0 };
+
+        commands
+            .spawn_bundle(SpriteBundle {
+                sprite: Sprite {
+                    flip_x: flip,
+                    ..Sprite::default()
+                },
+                transform: Transform {
+                    translation: Vec3::new(
+                        -direction as f32 * window_size.x / 2.0,
+                        rng.gen_range(0.1..=0.5) * -window_size.y,
+                        0.0,
+                    ),
+                    scale: Vec2::splat(4.0).extend(0.0),
+                    ..Transform::default()
+                },
+                texture: images.get_handle(fish_texture),
+                visibility: Visibility { is_visible: false },
+                ..SpriteBundle::default()
+            })
+            .insert(Fish {
+                start_time: time.time_since_startup() + Duration::from_secs_f64(rng.gen_range(1.0..=5.0)),
+                flip,
+                speed: direction * rng.gen_range(20.0..=100.0),
+            });
     }
 }
