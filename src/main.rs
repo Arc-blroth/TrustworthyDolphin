@@ -120,7 +120,7 @@ fn main() {
         })
         .add_plugin(AnimationPlugin::default())
         .add_plugin(AseLoaderDefaultPlugin)
-        .add_startup_system(window::setup.exclusive_system())
+        .add_plugin(window::WindowHandlingPlugin)
         .add_state(LoadingState::Loading)
         .add_system_set(SystemSet::on_enter(LoadingState::Loading).with_system(load_assets))
         .add_system_set(SystemSet::on_update(LoadingState::Loading).with_system(check_loading))
